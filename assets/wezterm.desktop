@@ -9,3 +9,4 @@ Exec=wezterm start --cwd .
 Type=Application
 Categories=System;TerminalEmulator;Utility;
 Terminal=false
+StartupNotify=true

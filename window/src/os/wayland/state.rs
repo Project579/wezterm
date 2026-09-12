@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use smithay_client_toolkit::activation::{ActivationHandler, ActivationState, RequestData, RequestDataExt};
 use smithay_client_toolkit::compositor::{CompositorState, SurfaceData};
 use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
 use smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource;
@@ -23,7 +24,7 @@ use smithay_client_toolkit::shm::slot::SlotPool;
 use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::subcompositor::SubcompositorState;
 use smithay_client_toolkit::{
-    delegate_compositor, delegate_data_device, delegate_output, delegate_pointer, delegate_primary_selection, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window, registry_handlers
+    delegate_activation, delegate_compositor, delegate_data_device, delegate_output, delegate_pointer, delegate_primary_selection, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window, registry_handlers
 };
 use wayland_client::backend::ObjectId;
 use wayland_client::globals::GlobalList;
@@ -53,6 +54,8 @@ pub(super) struct WaylandState {
     pub(super) output_manager: Option<OutputManagerState>,
     pub(super) seat: SeatState,
     pub(super) xdg: XdgShell,
+    /// None if the compositor doesn't support xdg-activation-v1.
+    pub(super) activation: Option<ActivationState>,
     pub(super) windows: RefCell<HashMap<usize, Rc<RefCell<WaylandWindowInner>>>>,
 
     pub(super) active_surface_id: RefCell<Option<ObjectId>>,
@@ -121,6 +124,7 @@ impl WaylandState {
             windows: RefCell::new(HashMap::new()),
             seat: SeatState::new(globals, qh),
             xdg: XdgShell::bind(globals, qh)?,
+            activation: ActivationState::bind(globals, qh).ok(),
             active_surface_id: RefCell::new(None),
             last_serial: RefCell::new(0),
             keyboard: None,
@@ -153,6 +157,23 @@ impl ProvidesRegistryState for WaylandState {
     }
 
     registry_handlers![OutputState, SeatState];
+}
+
+impl ActivationHandler for WaylandState {
+    type RequestData = RequestData;
+
+    fn new_token(&mut self, token: String, data: &Self::RequestData) {
+        let Some(activation) = self.activation.as_ref() else {
+            return;
+        };
+        let Some(surface) = data.surface() else {
+            log::warn!("xdg-activation token issued for a request with no surface");
+            return;
+        };
+        // The compositor issues invalid tokens for requests without a recent
+        // input serial or from an unfocused surface; that is undetectable here.
+        activation.activate::<Self>(surface, token);
+    }
 }
 
 impl ShmHandler for WaylandState {
@@ -192,6 +213,8 @@ delegate_seat!(WaylandState);
 delegate_data_device!(WaylandState);
 
 delegate_pointer!(WaylandState, pointer: [PointerUserData]);
+
+delegate_activation!(WaylandState);
 
 delegate_xdg_shell!(WaylandState);
 delegate_xdg_window!(WaylandState);
