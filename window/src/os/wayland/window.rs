@@ -85,7 +85,7 @@ impl WaylandDimensions for Dimensions {
 }
 
 use super::pointer::{PendingMouse, PointerUserData};
-use super::state::WaylandState;
+use super::state::{ActivationRequest, WaylandState};
 
 #[derive(Debug)]
 pub(super) struct KeyRepeatState {
@@ -660,13 +660,22 @@ impl WaylandWindowInner {
 
         let serial = *wayland_state.last_serial.borrow();
         let seat_and_serial = wayland_state.seat.seats().next().map(|seat| (seat, serial));
+        let generation = wayland_state
+            .activation_generation
+            .borrow()
+            .get(&self.surface().id())
+            .copied()
+            .unwrap_or(0);
 
-        activation.request_token::<WaylandState>(
+        activation.request_token_with_data::<WaylandState, ActivationRequest>(
             &qh,
-            RequestData {
-                app_id: Some(self.app_id.clone()),
-                seat_and_serial,
-                surface: Some(self.surface().clone()),
+            ActivationRequest {
+                data: RequestData {
+                    app_id: Some(self.app_id.clone()),
+                    seat_and_serial,
+                    surface: Some(self.surface().clone()),
+                },
+                generation,
             },
         );
     }
@@ -688,6 +697,12 @@ impl WaylandWindowInner {
             );
             return;
         };
+
+        *wayland_state
+            .activation_generation
+            .borrow_mut()
+            .entry(self.surface().id())
+            .or_insert(0) += 1;
 
         activation.activate::<WaylandState>(self.surface(), token);
     }
