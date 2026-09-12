@@ -407,6 +407,13 @@ impl WindowOps for WaylandWindow {
         });
     }
 
+    fn focus_with_token(&self, token: String) {
+        WaylandConnection::with_window_inner(self.0, move |inner| {
+            inner.focus_with_token(token);
+            Ok(())
+        });
+    }
+
     fn close(&self) {
         WaylandConnection::with_window_inner(self.0, |inner| {
             inner.close();
@@ -662,6 +669,27 @@ impl WaylandWindowInner {
                 surface: Some(self.surface().clone()),
             },
         );
+    }
+
+    /// Spends a token obtained elsewhere; the compositor silently ignores
+    /// a token that is stale, spent, or malformed.
+    fn focus_with_token(&mut self, token: String) {
+        if self.window.is_none() {
+            return;
+        }
+
+        let conn = crate::Connection::get().unwrap().wayland();
+        let wayland_state = conn.wayland_state.borrow();
+
+        let Some(activation) = wayland_state.activation.as_ref() else {
+            log::warn!(
+                "compositor does not support xdg-activation-v1; \
+                 cannot focus the window"
+            );
+            return;
+        };
+
+        activation.activate::<WaylandState>(self.surface(), token);
     }
 
     fn show(&mut self) {
