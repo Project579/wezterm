@@ -442,7 +442,7 @@ macro_rules! pdu {
 /// The overall version of the codec.
 /// This must be bumped when backwards incompatible changes
 /// are made to the types and protocol.
-pub const CODEC_VERSION: usize = 45;
+pub const CODEC_VERSION: usize = 46;
 
 // Defines the Pdu enum.
 // Each struct has an explicit identifying number.
@@ -840,6 +840,8 @@ pub struct SetClientId {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SetFocusedPane {
     pub pane_id: PaneId,
+    /// A compositor-granted xdg-activation token to raise the window with.
+    pub activation_token: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1186,6 +1188,29 @@ mod test {
             },
             Pdu::decode(encoded.as_slice()).unwrap()
         );
+    }
+
+    #[test]
+    fn test_pdu_set_focused_pane_round_trip() {
+        for activation_token in [None, Some("kwin-42".to_string())] {
+            let mut encoded = Vec::new();
+            Pdu::SetFocusedPane(SetFocusedPane {
+                pane_id: 7,
+                activation_token: activation_token.clone(),
+            })
+            .encode(&mut encoded, 0x43)
+            .unwrap();
+            assert_eq!(
+                DecodedPdu {
+                    serial: 0x43,
+                    pdu: Pdu::SetFocusedPane(SetFocusedPane {
+                        pane_id: 7,
+                        activation_token,
+                    })
+                },
+                Pdu::decode(encoded.as_slice()).unwrap()
+            );
+        }
     }
 
     #[test]

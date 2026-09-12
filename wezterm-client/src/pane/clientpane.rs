@@ -587,6 +587,7 @@ impl Pane for ClientPane {
                     .client
                     .set_focused_pane_id(SetFocusedPane {
                         pane_id: remote_pane_id,
+                        activation_token: None,
                     })
                     .await
             })

@@ -328,7 +328,10 @@ impl SessionHandler {
                 }
                 send_response(Ok(Pdu::UnitResponse(UnitResponse {})))
             }
-            Pdu::SetFocusedPane(SetFocusedPane { pane_id }) => {
+            Pdu::SetFocusedPane(SetFocusedPane {
+                pane_id,
+                activation_token: _,
+            }) => {
                 let client_id = self.client_id.clone();
                 spawn_into_main_thread(async move {
                     catch(
