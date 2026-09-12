@@ -30,9 +30,7 @@ use wayland_client::backend::ObjectId;
 use wayland_client::globals::GlobalList;
 use wayland_client::protocol::wl_keyboard::WlKeyboard;
 use wayland_client::protocol::wl_output::WlOutput;
-use wayland_client::protocol::wl_seat::WlSeat;
-use wayland_client::protocol::wl_surface::WlSurface;
-use wayland_client::{delegate_dispatch, Connection, Proxy, QueueHandle};
+use wayland_client::{delegate_dispatch, Connection, QueueHandle};
 use wayland_protocols::ext::background_effect::v1::client::ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1;
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
@@ -58,10 +56,6 @@ pub(super) struct WaylandState {
     pub(super) xdg: XdgShell,
     /// None if the compositor doesn't support xdg-activation-v1.
     pub(super) activation: Option<ActivationState>,
-    /// Counts supplied-token activations per surface. A tokenless reply
-    /// older than its surface's count would cancel the activation that
-    /// supplied token already performed.
-    pub(super) activation_generation: RefCell<HashMap<ObjectId, u32>>,
     pub(super) windows: RefCell<HashMap<usize, Rc<RefCell<WaylandWindowInner>>>>,
 
     pub(super) active_surface_id: RefCell<Option<ObjectId>>,
@@ -131,7 +125,6 @@ impl WaylandState {
             seat: SeatState::new(globals, qh),
             xdg: XdgShell::bind(globals, qh)?,
             activation: ActivationState::bind(globals, qh).ok(),
-            activation_generation: RefCell::new(HashMap::new()),
             active_surface_id: RefCell::new(None),
             last_serial: RefCell::new(0),
             keyboard: None,
@@ -166,30 +159,8 @@ impl ProvidesRegistryState for WaylandState {
     registry_handlers![OutputState, SeatState];
 }
 
-/// A token request, tagged with its surface's activation generation at
-/// request time, so a reply that a supplied token has superseded can be
-/// discarded instead of cancelling it.
-pub(super) struct ActivationRequest {
-    pub(super) data: RequestData,
-    pub(super) generation: u32,
-}
-
-impl RequestDataExt for ActivationRequest {
-    fn app_id(&self) -> Option<&str> {
-        self.data.app_id()
-    }
-
-    fn seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
-        self.data.seat_and_serial()
-    }
-
-    fn surface(&self) -> Option<&WlSurface> {
-        self.data.surface()
-    }
-}
-
 impl ActivationHandler for WaylandState {
-    type RequestData = ActivationRequest;
+    type RequestData = RequestData;
 
     fn new_token(&mut self, token: String, data: &Self::RequestData) {
         let Some(activation) = self.activation.as_ref() else {
@@ -199,24 +170,8 @@ impl ActivationHandler for WaylandState {
             log::warn!("xdg-activation token issued for a request with no surface");
             return;
         };
-
-        // KWin answers a request it will not grant with a token of this
-        // shape rather than an error. Spending one cancels an activation
-        // that already succeeded on the same surface.
-        if token.starts_with("not-granted") {
-            return;
-        }
-
-        let generation = self
-            .activation_generation
-            .borrow()
-            .get(&surface.id())
-            .copied()
-            .unwrap_or(0);
-        if data.generation < generation {
-            return;
-        }
-
+        // The compositor issues invalid tokens for requests without a recent
+        // input serial or from an unfocused surface; that is undetectable here.
         activation.activate::<Self>(surface, token);
     }
 }
@@ -259,7 +214,7 @@ delegate_data_device!(WaylandState);
 
 delegate_pointer!(WaylandState, pointer: [PointerUserData]);
 
-delegate_activation!(WaylandState, ActivationRequest);
+delegate_activation!(WaylandState);
 
 delegate_xdg_shell!(WaylandState);
 delegate_xdg_window!(WaylandState);
