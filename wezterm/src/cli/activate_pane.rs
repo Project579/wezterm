@@ -9,6 +9,11 @@ pub struct ActivatePane {
     /// environment variable WEZTERM_PANE.
     #[arg(long)]
     pane_id: Option<PaneId>,
+
+    /// Raise the containing window using this xdg-activation token.
+    /// Falls back to $XDG_ACTIVATION_TOKEN. Wayland only; ignored elsewhere.
+    #[arg(long)]
+    activation_token: Option<String>,
 }
 
 impl ActivatePane {
@@ -17,7 +22,9 @@ impl ActivatePane {
         client
             .set_focused_pane_id(codec::SetFocusedPane {
                 pane_id,
-                activation_token: None,
+                activation_token: crate::cli::resolve_activation_token(
+                    self.activation_token.as_deref(),
+                ),
             })
             .await?;
         Ok(())
