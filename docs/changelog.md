@@ -158,6 +158,9 @@ As features stabilize some brief notes about them will accumulate here.
   search matching. Thanks to @mrdziuban! #7385
 * The line editor used by prompt overlays and the debug overlay now supports
   `CTRL-u` to kill back to the start of the line. Thanks to @bew! #8013
+* `wezterm cli activate-pane` and `wezterm cli activate-tab` accept
+  `--activation-token`, to raise a window on Wayland using a token granted by
+  the compositor to another process. Falls back to `$XDG_ACTIVATION_TOKEN`.
 
 #### Fixed
 * macOS: Fix window border when opacity<1 and shadow enabled.
