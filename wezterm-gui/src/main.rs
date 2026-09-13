@@ -1199,6 +1199,8 @@ fn run() -> anyhow::Result<()> {
     };
 
     env_bootstrap::bootstrap();
+    // A launcher's stale token, inherited by panes, beats the tokenless path.
+    std::env::remove_var("XDG_ACTIVATION_TOKEN");
     // window_funcs is not set up by env_bootstrap as window_funcs is
     // GUI environment specific and env_bootstrap is used to setup the
     // headless mux server.

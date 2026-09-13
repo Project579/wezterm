@@ -97,6 +97,24 @@ impl GuiFrontEnd {
                     })
                     .detach();
                 }
+                MuxNotification::WindowActivationRequested {
+                    pane_id,
+                    activation_token,
+                } => {
+                    promise::spawn::spawn_into_main_thread(async move {
+                        let mux = Mux::get();
+                        if let Some((_domain_id, mux_window_id, _tab_id)) =
+                            mux.resolve_pane_id(pane_id)
+                        {
+                            if let Some(gui_win) = try_front_end()
+                                .and_then(|fe| fe.gui_window_for_mux_window(mux_window_id))
+                            {
+                                gui_win.window.focus_with_token(activation_token);
+                            }
+                        }
+                    })
+                    .detach();
+                }
                 MuxNotification::TabTitleChanged { .. } => {}
                 MuxNotification::WindowTitleChanged { .. } => {}
                 MuxNotification::TabResized(_) => {}

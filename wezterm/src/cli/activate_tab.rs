@@ -42,6 +42,11 @@ pub struct ActivateTab {
     /// contains appropriate tabs
     #[arg(long)]
     pane_id: Option<PaneId>,
+
+    /// Raise the containing window using this xdg-activation token.
+    /// Falls back to $XDG_ACTIVATION_TOKEN. Wayland only; ignored elsewhere.
+    #[arg(long)]
+    activation_token: Option<String>,
 }
 
 impl ActivateTab {
@@ -149,11 +154,6 @@ impl ActivateTab {
                 anyhow::anyhow!("could not determine which pane should be active for tab {tab_id}")
             })?;
 
-        client
-            .set_focused_pane_id(codec::SetFocusedPane {
-                pane_id: target_pane,
-            })
-            .await?;
-        Ok(())
+        crate::cli::focus_pane(&client, target_pane, self.activation_token.as_deref()).await
     }
 }

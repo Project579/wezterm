@@ -31,5 +31,9 @@ Options:
           
           The pane is used to figure out which window contains appropriate tabs
 
+      --activation-token <ACTIVATION_TOKEN>
+          Raise the containing window using this xdg-activation token. Falls
+          back to $XDG_ACTIVATION_TOKEN. Wayland only; ignored elsewhere
+
   -h, --help
           Print help (see a summary with '-h')

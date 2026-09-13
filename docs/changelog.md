@@ -163,6 +163,9 @@ As features stabilize some brief notes about them will accumulate here.
   otherwise the compositor refuses and flags the window instead. `wezterm cli
   activate-pane` and `activate-tab` now also raise the window containing the
   target pane, on every platform.
+* `wezterm cli activate-pane` and `wezterm cli activate-tab` accept
+  `--activation-token`, to raise a window on Wayland using a token granted by
+  the compositor to another process. Falls back to `$XDG_ACTIVATION_TOKEN`.
 
 #### Fixed
 * Multiplexer: the mouse wheel was not mapped to cursor up/down keys in the
