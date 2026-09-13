@@ -11,12 +11,8 @@ Attempts to focus and activate the window.
 |X11            |Yes                     |
 |Wayland        |Yes*                    |
 
-
-\* On Wayland a client cannot focus itself directly; the request is made through
-the `xdg-activation-v1` protocol and the compositor decides whether to honor
-it. Compositors commonly ignore activation requests that don't originate from
-recent user input, or that come from a client that isn't currently focused, and
-may show a "demands attention" indication rather than raising the window. The
-request is most likely to be honored when another WezTerm window already has
-focus. If the compositor doesn't implement `xdg-activation-v1` at all, this
-does nothing.
+\* On Wayland the request goes through `xdg-activation-v1` and the compositor
+decides. Requests that don't follow recent user input, or come from an
+unfocused client, are commonly ignored, often with a "demands attention"
+indication instead of a raise. Nothing happens if the compositor lacks the
+protocol.
