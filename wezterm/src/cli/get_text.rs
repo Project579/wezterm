@@ -24,7 +24,7 @@ pub struct GetText {
     /// 0 is the first line of terminal screen.
     /// Negative numbers proceed backwards into the scrollback.
     /// The default value if unspecified is the bottom of the
-    /// the terminal screen.
+    /// terminal screen.
     #[arg(long, allow_hyphen_values = true)]
     end_line: Option<ScrollbackOrVisibleRowIndex>,
 
