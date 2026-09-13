@@ -4,8 +4,10 @@ Usage: wezterm cli activate-pane [OPTIONS]
 
 Options:
       --pane-id <PANE_ID>
-          Specify the target pane. The default is to use the current pane based on the environment variable WEZTERM_PANE
+          Specify the target pane. The default is to use the current pane based
+          on the environment variable WEZTERM_PANE
       --activation-token <ACTIVATION_TOKEN>
-          Raise the containing window using this xdg-activation token. Falls back to $XDG_ACTIVATION_TOKEN. Wayland only; ignored elsewhere
+          Raise the containing window using this xdg-activation token. Falls
+          back to $XDG_ACTIVATION_TOKEN. Wayland only; ignored elsewhere
   -h, --help
           Print help

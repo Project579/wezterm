@@ -776,6 +776,7 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+ "terminal_size 0.4.4",
 ]
 
 [[package]]
@@ -3033,7 +3034,7 @@ dependencies = [
  "proc-macro2",
  "regex",
  "syn 2.0.119",
- "terminal_size",
+ "terminal_size 0.2.6",
 ]
 
 [[package]]
@@ -5934,6 +5935,16 @@ checksum = "8e6bf6f19e9f8ed8d4048dc22981458ebcf406d67e94cd422e5ecd73d63b3237"
 dependencies = [
  "rustix 0.37.28",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
+dependencies = [
+ "rustix 1.1.4",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
