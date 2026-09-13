@@ -222,3 +222,52 @@ pub fn resolve_relative_cwd(cwd: Option<OsString>) -> anyhow::Result<Option<Stri
         )),
     }
 }
+
+pub fn resolve_activation_token(explicit: Option<&str>) -> Option<String> {
+    let env = std::env::var("XDG_ACTIVATION_TOKEN").ok();
+    pick_activation_token(explicit, env.as_deref())
+}
+
+fn pick_activation_token(explicit: Option<&str>, env: Option<&str>) -> Option<String> {
+    fn clean(s: &str) -> Option<String> {
+        let s = s.trim();
+        (!s.is_empty()).then(|| s.to_string())
+    }
+
+    explicit.and_then(clean).or_else(|| env.and_then(clean))
+}
+
+#[cfg(test)]
+mod activation_token {
+    use super::pick_activation_token;
+
+    #[test]
+    fn explicit_wins_over_env() {
+        assert_eq!(
+            pick_activation_token(Some("kwin-1"), Some("kwin-2")),
+            Some("kwin-1".to_string())
+        );
+    }
+
+    #[test]
+    fn trailing_newline_is_trimmed() {
+        assert_eq!(
+            pick_activation_token(Some("kwin-1\n"), None),
+            Some("kwin-1".to_string())
+        );
+    }
+
+    #[test]
+    fn blank_explicit_falls_through_to_env() {
+        assert_eq!(
+            pick_activation_token(Some("   "), Some("kwin-2")),
+            Some("kwin-2".to_string())
+        );
+    }
+
+    #[test]
+    fn blank_or_absent_yields_none() {
+        assert_eq!(pick_activation_token(Some(""), Some("")), None);
+        assert_eq!(pick_activation_token(None, None), None);
+    }
+}

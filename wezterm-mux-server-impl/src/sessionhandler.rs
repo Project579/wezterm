@@ -328,7 +328,10 @@ impl SessionHandler {
                 }
                 send_response(Ok(Pdu::UnitResponse(UnitResponse {})))
             }
-            Pdu::SetFocusedPane(SetFocusedPane { pane_id }) => {
+            Pdu::SetFocusedPane(SetFocusedPane {
+                pane_id,
+                activation_token,
+            }) => {
                 let client_id = self.client_id.clone();
                 spawn_into_main_thread(async move {
                     catch(
@@ -363,6 +366,12 @@ impl SessionHandler {
 
                             mux.record_focus_for_current_identity(pane_id);
                             mux.notify(mux::MuxNotification::PaneFocused(pane_id));
+                            if let Some(activation_token) = activation_token {
+                                mux.notify(mux::MuxNotification::WindowActivationRequested {
+                                    pane_id,
+                                    activation_token,
+                                });
+                            }
 
                             Ok(Pdu::UnitResponse(UnitResponse {}))
                         },

@@ -82,6 +82,10 @@ pub enum MuxNotification {
         window_id: WindowId,
     },
     PaneFocused(PaneId),
+    WindowActivationRequested {
+        pane_id: PaneId,
+        activation_token: String,
+    },
     TabResized(TabId),
     TabTitleChanged {
         tab_id: TabId,
