@@ -203,7 +203,7 @@ where
                 stream.flush().await.context("flushing PDU to client")?;
             }
             Ok(Item::Notif(MuxNotification::ActiveWorkspaceChanged(_))) => {}
-            // Single-use and local to this compositor; never forwarded.
+            // Single-use, compositor-local; never forwarded.
             Ok(Item::Notif(MuxNotification::WindowActivationRequested { .. })) => {}
             Ok(Item::Notif(MuxNotification::Empty)) => {}
             Err(err) => {

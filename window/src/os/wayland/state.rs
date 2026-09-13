@@ -169,8 +169,7 @@ impl ActivationHandler for WaylandState {
             log::warn!("xdg-activation token issued for a request with no surface");
             return;
         };
-        // The compositor issues invalid tokens for requests without a recent
-        // input serial or from an unfocused surface; that is undetectable here.
+        // A refused request still yields a token; undetectable here.
         activation.activate::<Self>(surface, token);
     }
 }

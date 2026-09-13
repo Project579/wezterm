@@ -639,8 +639,7 @@ impl WaylandWindowInner {
         self.window.take();
     }
 
-    /// Requests an xdg-activation token; the activation itself happens in
-    /// `ActivationHandler::new_token` once the compositor replies.
+    /// Activation happens in `ActivationHandler::new_token` on the reply.
     fn focus(&mut self) {
         if self.window.is_none() {
             return;
@@ -671,7 +670,7 @@ impl WaylandWindowInner {
         );
     }
 
-    /// The compositor silently ignores a stale, spent or malformed token.
+    /// A stale, spent or malformed token is silently ignored.
     fn focus_with_token(&mut self, token: String) {
         if self.window.is_none() {
             return;
