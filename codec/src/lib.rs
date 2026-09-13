@@ -840,7 +840,6 @@ pub struct SetClientId {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SetFocusedPane {
     pub pane_id: PaneId,
-    /// A compositor-granted xdg-activation token to raise the window with.
     pub activation_token: Option<String>,
 }
 

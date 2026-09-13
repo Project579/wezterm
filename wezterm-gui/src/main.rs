@@ -1199,10 +1199,8 @@ fn run() -> anyhow::Result<()> {
     };
 
     env_bootstrap::bootstrap();
-    // Our .desktop file sets StartupNotify, so a launcher hands us an
-    // activation token that nothing consumes. Panes snapshot our
-    // environment at spawn time, and a stale token there would beat
-    // the working tokenless path in `wezterm cli activate-pane`.
+    // Panes inherit our environment, and a launcher's stale token there
+    // would beat the working tokenless path in `wezterm cli activate-pane`.
     std::env::remove_var("XDG_ACTIVATION_TOKEN");
     // window_funcs is not set up by env_bootstrap as window_funcs is
     // GUI environment specific and env_bootstrap is used to setup the

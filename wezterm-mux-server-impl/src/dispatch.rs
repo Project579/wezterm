@@ -203,8 +203,7 @@ where
                 stream.flush().await.context("flushing PDU to client")?;
             }
             Ok(Item::Notif(MuxNotification::ActiveWorkspaceChanged(_))) => {}
-            // An activation token is single-use and belongs to the local
-            // compositor, so it is never forwarded to a remote client.
+            // Single-use and local to this compositor; never forwarded.
             Ok(Item::Notif(MuxNotification::WindowActivationRequested { .. })) => {}
             Ok(Item::Notif(MuxNotification::Empty)) => {}
             Err(err) => {

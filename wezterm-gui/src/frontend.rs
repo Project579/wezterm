@@ -85,8 +85,6 @@ impl GuiFrontEnd {
                             return;
                         }
 
-                        // Activating the tab leaves the containing window behind
-                        // whatever else has focus, so raise it too.
                         if let Some((_domain_id, mux_window_id, _tab_id)) =
                             mux.resolve_pane_id(pane_id)
                         {

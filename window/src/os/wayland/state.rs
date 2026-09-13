@@ -54,7 +54,6 @@ pub(super) struct WaylandState {
     pub(super) output_manager: Option<OutputManagerState>,
     pub(super) seat: SeatState,
     pub(super) xdg: XdgShell,
-    /// None if the compositor doesn't support xdg-activation-v1.
     pub(super) activation: Option<ActivationState>,
     pub(super) windows: RefCell<HashMap<usize, Rc<RefCell<WaylandWindowInner>>>>,
 

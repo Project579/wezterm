@@ -671,8 +671,7 @@ impl WaylandWindowInner {
         );
     }
 
-    /// Spends a token obtained elsewhere; the compositor silently ignores
-    /// a token that is stale, spent, or malformed.
+    /// The compositor silently ignores a stale, spent or malformed token.
     fn focus_with_token(&mut self, token: String) {
         if self.window.is_none() {
             return;

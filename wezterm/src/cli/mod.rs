@@ -223,8 +223,6 @@ pub fn resolve_relative_cwd(cwd: Option<OsString>) -> anyhow::Result<Option<Stri
     }
 }
 
-/// The explicit flag wins; otherwise fall back to the freedesktop
-/// `XDG_ACTIVATION_TOKEN` convention.
 pub fn resolve_activation_token(explicit: Option<&str>) -> Option<String> {
     let env = std::env::var("XDG_ACTIVATION_TOKEN").ok();
     pick_activation_token(explicit, env.as_deref())

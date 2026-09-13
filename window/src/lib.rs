@@ -323,8 +323,6 @@ pub trait WindowOps {
     fn restore(&self) {}
     fn focus(&self) {}
 
-    /// Focus using a compositor-supplied activation token.
-    /// Platforms without a token concept fall back to `focus`.
     fn focus_with_token(&self, _token: String) {
         self.focus()
     }
