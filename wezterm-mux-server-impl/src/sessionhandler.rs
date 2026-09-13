@@ -333,37 +333,28 @@ impl SessionHandler {
                 spawn_into_main_thread(async move {
                     catch(
                         move || {
-                            let mux = Mux::get();
-                            let _identity = mux.with_identity(client_id);
+                            focus_pane(client_id, pane_id)?;
+                            Ok(Pdu::UnitResponse(UnitResponse {}))
+                        },
+                        send_response,
+                    )
+                })
+                .detach();
+            }
 
-                            let pane = mux
-                                .get_pane(pane_id)
-                                .ok_or_else(|| anyhow::anyhow!("pane {pane_id} not found"))?;
-
-                            let (_domain_id, window_id, tab_id) = mux
-                                .resolve_pane_id(pane_id)
-                                .ok_or_else(|| anyhow::anyhow!("pane {pane_id} not found"))?;
-                            {
-                                let mut window =
-                                    mux.get_window_mut(window_id).ok_or_else(|| {
-                                        anyhow::anyhow!("window {window_id} not found")
-                                    })?;
-                                let tab_idx =
-                                    window.get_tab_idx_for_id(tab_id).ok_or_else(|| {
-                                        anyhow::anyhow!(
-                                            "tab {tab_id} isn't really in window {window_id}!?"
-                                        )
-                                    })?;
-                                window.remember_and_set_active_tab_idx(tab_idx);
-                            }
-                            let tab = mux
-                                .get_tab(tab_id)
-                                .ok_or_else(|| anyhow::anyhow!("tab {tab_id} not found"))?;
-                            tab.set_active_pane(&pane);
-
-                            mux.record_focus_for_current_identity(pane_id);
-                            mux.notify(mux::MuxNotification::PaneFocused(pane_id));
-
+            Pdu::ActivatePaneWithToken(ActivatePaneWithToken {
+                pane_id,
+                activation_token,
+            }) => {
+                let client_id = self.client_id.clone();
+                spawn_into_main_thread(async move {
+                    catch(
+                        move || {
+                            focus_pane(client_id, pane_id)?;
+                            Mux::get().notify(mux::MuxNotification::WindowActivationRequested {
+                                pane_id,
+                                activation_token,
+                            });
                             Ok(Pdu::UnitResponse(UnitResponse {}))
                         },
                         send_response,
@@ -1022,6 +1013,36 @@ impl SessionHandler {
 // function below because the compiler thinks that all of its locals then need to be Send.
 // We need to shimmy through this helper to break that aspect of the compiler flow
 // analysis and allow things to compile.
+fn focus_pane(client_id: Option<Arc<ClientId>>, pane_id: PaneId) -> anyhow::Result<()> {
+    let mux = Mux::get();
+    let _identity = mux.with_identity(client_id);
+
+    let pane = mux
+        .get_pane(pane_id)
+        .ok_or_else(|| anyhow::anyhow!("pane {pane_id} not found"))?;
+
+    let (_domain_id, window_id, tab_id) = mux
+        .resolve_pane_id(pane_id)
+        .ok_or_else(|| anyhow::anyhow!("pane {pane_id} not found"))?;
+    {
+        let mut window = mux
+            .get_window_mut(window_id)
+            .ok_or_else(|| anyhow::anyhow!("window {window_id} not found"))?;
+        let tab_idx = window
+            .get_tab_idx_for_id(tab_id)
+            .ok_or_else(|| anyhow::anyhow!("tab {tab_id} isn't really in window {window_id}!?"))?;
+        window.remember_and_set_active_tab_idx(tab_idx);
+    }
+    let tab = mux
+        .get_tab(tab_id)
+        .ok_or_else(|| anyhow::anyhow!("tab {tab_id} not found"))?;
+    tab.set_active_pane(&pane);
+
+    mux.record_focus_for_current_identity(pane_id);
+    mux.notify(mux::MuxNotification::PaneFocused(pane_id));
+    Ok(())
+}
+
 fn schedule_domain_spawn_v2<SND>(
     spawn: SpawnV2,
     send_response: SND,

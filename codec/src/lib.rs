@@ -503,6 +503,7 @@ pdu! {
     GetPaneDirection: 60,
     GetPaneDirectionResponse: 61,
     AdjustPaneSize: 62,
+    ActivatePaneWithToken: 63,
 }
 
 impl Pdu {
@@ -840,6 +841,12 @@ pub struct SetClientId {
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct SetFocusedPane {
     pub pane_id: PaneId,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
+pub struct ActivatePaneWithToken {
+    pub pane_id: PaneId,
+    pub activation_token: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1247,6 +1254,20 @@ mod test {
                 serial: 0x42,
                 pdu: Pdu::Pong(Pong {})
             },
+            Pdu::decode(encoded.as_slice()).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_pdu_activate_pane_with_token() {
+        let pdu = Pdu::ActivatePaneWithToken(ActivatePaneWithToken {
+            pane_id: 7,
+            activation_token: "kwin-42".to_string(),
+        });
+        let mut encoded = Vec::new();
+        pdu.encode(&mut encoded, 0x42).unwrap();
+        assert_eq!(
+            DecodedPdu { serial: 0x42, pdu },
             Pdu::decode(encoded.as_slice()).unwrap()
         );
     }
