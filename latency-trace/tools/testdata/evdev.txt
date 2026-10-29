@@ -1,0 +1,3 @@
+# sniff_evdev.py (synthetic)
+1000150000000,evdev_key,1
+1000240000000,evdev_key,0

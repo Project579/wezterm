@@ -240,6 +240,14 @@ impl WindowOps for Window {
         }
     }
 
+    fn finish_webgpu_frame(&self) {
+        match self {
+            Self::X11(x) => x.finish_webgpu_frame(),
+            #[cfg(feature = "wayland")]
+            Self::Wayland(w) => w.finish_webgpu_frame(),
+        }
+    }
+
     fn close(&self) {
         match self {
             Self::X11(x) => x.close(),

@@ -830,6 +830,12 @@ fn main() {
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
 
+    // Keep the latency trace path, if any, to ourselves so that the
+    // processes we spawn (the mux server, programs in panes, a nested
+    // wezterm) do not truncate the same file. Must run while we are still
+    // single-threaded.
+    latency_trace::take_env();
+
     config::designate_this_as_the_main_thread();
     config::assign_error_callback(mux::connui::show_configuration_error_message);
     notify_on_panic();

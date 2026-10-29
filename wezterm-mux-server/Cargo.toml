@@ -9,6 +9,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+latency-trace.workspace = true
 anyhow.workspace = true
 async_ossl.workspace = true
 clap.workspace = true

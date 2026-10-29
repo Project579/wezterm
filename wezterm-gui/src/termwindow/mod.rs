@@ -458,6 +458,9 @@ pub struct TermWindow {
     created: Instant,
 
     pub last_frame_duration: Duration,
+    /// (pane_id, seqno) of the panes drawn by the current paint pass,
+    /// collected only while latency tracing is enabled
+    traced_paint_panes: Vec<(PaneId, SequenceNo)>,
     last_fps_check_time: Instant,
     num_frames: usize,
     pub fps: f32,
@@ -687,6 +690,7 @@ impl TermWindow {
             last_fps_check_time: Instant::now(),
             num_frames: 0,
             last_frame_duration: Duration::ZERO,
+            traced_paint_panes: vec![],
             fps: 0.,
             config_subscription: None,
             os_parameters: None,
@@ -1437,6 +1441,7 @@ impl TermWindow {
     }
 
     fn mux_pane_output_event(&mut self, pane_id: PaneId) {
+        latency_trace::record(latency_trace::Event::GuiOutput, &[pane_id as u64]);
         metrics::histogram!("mux.pane_output_event.rate").record(1.);
         if self.is_pane_visible(pane_id) {
             if let Some(ref win) = self.window {

@@ -64,6 +64,11 @@ struct Opt {
 }
 
 fn main() {
+    // Keep the latency trace path, if any, to ourselves so that programs in
+    // panes do not truncate the same file. Must run while we are still
+    // single-threaded.
+    latency_trace::take_env();
+
     if let Err(err) = run() {
         wezterm_blob_leases::clear_storage();
         log::error!("{:#}", err);
@@ -137,6 +142,9 @@ fn run() -> anyhow::Result<()> {
         }
         if opts.skip_config {
             cmd.arg("-n");
+        }
+        if let Some(path) = latency_trace::trace_path() {
+            cmd.env(latency_trace::ENV_VAR, path);
         }
         if let Some(f) = &opts.config_file {
             cmd.arg("--config-file");

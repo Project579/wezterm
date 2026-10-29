@@ -124,6 +124,16 @@ fn send_actions_to_mux(pane: &Weak<dyn Pane>, dead: &Arc<AtomicBool>, actions: V
     match pane.upgrade() {
         Some(pane) => {
             pane.perform_actions(actions);
+            if latency_trace::enabled() {
+                // Take the timestamp first: get_current_seqno can block on
+                // the terminal lock while the gui is painting
+                let ts = latency_trace::now_ns();
+                latency_trace::record_at(
+                    ts,
+                    latency_trace::Event::ParseApply,
+                    &[pane.pane_id() as u64, pane.get_current_seqno() as u64],
+                );
+            }
             histogram!("send_actions_to_mux.perform_actions.latency").record(start.elapsed());
             Mux::notify_from_any_thread(MuxNotification::PaneOutput(pane.pane_id()));
         }
@@ -334,6 +344,10 @@ fn read_from_pane_pty(
                 break;
             }
             Ok(size) => {
+                latency_trace::record(
+                    latency_trace::Event::PtyRead,
+                    &[pane_id as u64, size as u64],
+                );
                 histogram!("read_from_pane_pty.bytes.rate").record(size as f64);
                 log::trace!("read_pty pane {pane_id} read {size} bytes");
                 // Send received data to this pane parser thread.

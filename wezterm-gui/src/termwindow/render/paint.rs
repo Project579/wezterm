@@ -15,6 +15,7 @@ pub enum AllowImage {
 
 impl crate::TermWindow {
     pub fn paint_impl(&mut self, frame: &mut RenderFrame) {
+        latency_trace::record(latency_trace::Event::PaintStart, &[]);
         self.num_frames += 1;
         // If nothing on screen needs animating, then we can avoid
         // invalidating as frequently
@@ -105,6 +106,15 @@ impl crate::TermWindow {
         }
         log::debug!("paint_impl before call_draw elapsed={:?}", start.elapsed());
 
+        // Only the last pass reflects what is drawn
+        for (pane_id, seqno) in self.traced_paint_panes.drain(..) {
+            latency_trace::record(
+                latency_trace::Event::PaintPane,
+                &[pane_id as u64, seqno as u64],
+            );
+        }
+
+        // call_draw records PaintEnd
         self.call_draw(frame).ok();
         self.last_frame_duration = start.elapsed();
         log::debug!(
@@ -171,6 +181,7 @@ impl crate::TermWindow {
 
         // Clear out UI item positions; we'll rebuild these as we render
         self.ui_items.clear();
+        self.traced_paint_panes.clear();
 
         let panes = self.get_panes_to_render();
         let focused = self.focused.is_some();

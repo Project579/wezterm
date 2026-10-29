@@ -565,6 +565,10 @@ impl crate::TermWindow {
                 }
             }
 
+            if latency_trace::enabled() {
+                let seqno = pos.pane.get_current_seqno();
+                render.term_window.traced_paint_panes.push((pane_id, seqno));
+            }
             pos.pane.with_lines_mut(stable_range.clone(), &mut render);
             if let Some(error) = render.error.take() {
                 return Err(error).context("error while calling with_lines_mut");

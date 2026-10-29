@@ -34,6 +34,7 @@ cc.workspace = true
 embed-resource.workspace = true
 
 [dependencies]
+latency-trace.workspace = true
 anyhow.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
