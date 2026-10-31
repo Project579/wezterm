@@ -477,8 +477,11 @@ def main(argv=None):
     p.add_argument("--csv", metavar="OUT", help="write per-chain timestamps")
     args = p.parse_args(argv)
 
-    idx, mode, chains, unmatched_origins, excluded_startup = run(
-        [args.trace] + args.extra, args.mode, args.echo_window_ms)
+    try:
+        idx, mode, chains, unmatched_origins, excluded_startup = run(
+            [args.trace] + args.extra, args.mode, args.echo_window_ms)
+    except OSError as err:
+        sys.exit(f"cannot read trace: {err}")
 
     if not idx.pres_clocks:
         print("note: no pres_clock record; assuming presented_ns is "

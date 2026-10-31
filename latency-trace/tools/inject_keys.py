@@ -188,7 +188,11 @@ def wait_ack(path, want, timeout):
 
 class VirtualKeyboard:
     def __init__(self, name):
-        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        except OSError as err:
+            sys.exit(f"cannot open /dev/uinput: {err}\n"
+                     "load the module with: sudo modprobe uinput")
         try:
             fcntl.ioctl(self.fd, UI_SET_EVBIT, EV_KEY)
             fcntl.ioctl(self.fd, UI_SET_EVBIT, EV_SYN)
