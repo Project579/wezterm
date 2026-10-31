@@ -496,19 +496,34 @@ impl LocalDomain {
 #[derive(Clone)]
 pub(crate) struct WriterWrapper {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    /// When set, writes are recorded as latency trace events for this pane
+    trace_pane_id: Option<PaneId>,
 }
 
 impl WriterWrapper {
     pub fn new(writer: Box<dyn Write + Send>) -> Self {
         Self {
             writer: Arc::new(Mutex::new(writer)),
+            trace_pane_id: None,
         }
+    }
+
+    pub fn with_trace_pane_id(mut self, pane_id: PaneId) -> Self {
+        self.trace_pane_id.replace(pane_id);
+        self
     }
 }
 
 impl std::io::Write for WriterWrapper {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.writer.lock().write(buf)
+        let size = self.writer.lock().write(buf)?;
+        if let Some(pane_id) = self.trace_pane_id {
+            latency_trace::record(
+                latency_trace::Event::PtyWrite,
+                &[pane_id as u64, size as u64],
+            );
+        }
+        Ok(size)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -616,7 +631,7 @@ impl Domain for LocalDomain {
             self.name
         );
         let child_result = pair.slave.spawn_command(cmd);
-        let mut writer = WriterWrapper::new(pair.master.take_writer()?);
+        let mut writer = WriterWrapper::new(pair.master.take_writer()?).with_trace_pane_id(pane_id);
 
         let mut terminal = wezterm_term::Terminal::new(
             size,

@@ -1,5 +1,6 @@
 use std::borrow::BorrowMut;
 
+use latency_trace::Event;
 use wayland_client::protocol::wl_keyboard::{
     Event as WlKeyboardEvent, KeyState, KeymapFormat, WlKeyboard,
 };
@@ -22,6 +23,15 @@ impl Dispatch<WlKeyboard, KeyboardData> for WaylandState {
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<WaylandState>,
     ) {
+        if let WlKeyboardEvent::Key {
+            time,
+            state: key_state,
+            ..
+        } = &event
+        {
+            let pressed = matches!(key_state, WEnum::Value(KeyState::Pressed));
+            latency_trace::record(Event::WlKey, &[*time as u64, pressed as u64]);
+        }
         log::trace!("We reached an event here: {:?}???", event);
         match &event {
             WlKeyboardEvent::Enter {

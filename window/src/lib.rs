@@ -256,6 +256,12 @@ pub trait WindowOps {
         Ok(())
     }
 
+    /// Advise the window that a WebGpu frame was just presented.
+    /// WebGpu presents through its own surface, so unlike `finish_frame`
+    /// this doesn't present anything; it only lets the window observe
+    /// the presentation.
+    fn finish_webgpu_frame(&self) {}
+
     /// Hide a visible window
     fn hide(&self);
 

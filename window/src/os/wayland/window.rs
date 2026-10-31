@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::max;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io::Read;
 use std::num::NonZeroU32;
@@ -8,6 +9,7 @@ use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -15,6 +17,7 @@ use anyhow::{anyhow, bail};
 use async_io::Timer;
 use async_trait::async_trait;
 use config::ConfigHandle;
+use latency_trace::Event;
 use promise::{Future, Promise};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
@@ -40,10 +43,14 @@ use wayland_client::protocol::wl_keyboard::{Event as WlKeyboardEvent, KeyState};
 use wayland_client::protocol::wl_pointer::{ButtonState, WlPointer};
 use wayland_client::protocol::wl_region::WlRegion;
 use wayland_client::protocol::wl_surface::WlSurface;
-use wayland_client::{Connection as WConnection, Dispatch, Proxy, QueueHandle};
+use wayland_client::{Connection as WConnection, Dispatch, Proxy, QueueHandle, WEnum};
 use wayland_egl::{is_available as egl_is_available, WlEglSurface};
 use wayland_protocols::ext::background_effect::v1::client::ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1;
 use wayland_protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1;
+use wayland_protocols::wp::presentation_time::client::wp_presentation::{self, WpPresentation};
+use wayland_protocols::wp::presentation_time::client::wp_presentation_feedback::{
+    self, WpPresentationFeedback,
+};
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur_manager::OrgKdeKwinBlurManager;
 use wezterm_font::FontConfiguration;
@@ -85,6 +92,24 @@ impl WaylandDimensions for Dimensions {
 
 use super::pointer::{PendingMouse, PointerUserData};
 use super::state::{ActivationRequest, WaylandState};
+
+static NEXT_FRAME_ID: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    // The presentation feedback frame_id requested for the next commit
+    // of each window's surface
+    static PENDING_FEEDBACK: RefCell<HashMap<usize, u64>> = RefCell::new(HashMap::new());
+}
+
+fn record_commit(window_id: usize) {
+    if !latency_trace::enabled() {
+        return;
+    }
+    let frame_id = PENDING_FEEDBACK
+        .with(|pending| pending.borrow_mut().remove(&window_id))
+        .unwrap_or(0);
+    latency_trace::record(Event::Commit, &[window_id as u64, frame_id]);
+}
 
 #[derive(Debug)]
 pub(super) struct KeyRepeatState {
@@ -301,7 +326,10 @@ impl WaylandWindow {
 
         let appearance = conn.get_appearance();
 
+        let presentation = conn.wayland_state.borrow().presentation.clone();
+
         let inner = Rc::new(RefCell::new(WaylandWindowInner {
+            window_id,
             events: WindowEventSender::new(event_handler),
             surface_factor: 1.0,
             invalidated: false,
@@ -336,6 +364,7 @@ impl WaylandWindow {
             wegl_surface: None,
             gl_state: None,
             ext_background_effect_surface: None,
+            presentation,
         }));
 
         let window_handle = Window::Wayland(WaylandWindow(window_id));
@@ -390,6 +419,16 @@ impl WindowOps for WaylandWindow {
             }
         })
         .await
+    }
+
+    fn finish_frame(&self, frame: glium::Frame) -> anyhow::Result<()> {
+        frame.finish()?;
+        record_commit(self.0);
+        Ok(())
+    }
+
+    fn finish_webgpu_frame(&self) {
+        record_commit(self.0);
     }
 
     fn hide(&self) {
@@ -597,6 +636,7 @@ pub(crate) fn read_pipe_with_timeout(mut file: ReadPipe) -> anyhow::Result<Strin
 }
 
 pub struct WaylandWindowInner {
+    window_id: usize,
     pub(crate) events: WindowEventSender,
     surface_factor: f64,
     window: Option<XdgWindow>,
@@ -630,6 +670,7 @@ pub struct WaylandWindowInner {
     wegl_surface: Option<WlEglSurface>,
     gl_state: Option<Rc<glium::backend::Context>>,
     ext_background_effect_surface: Option<ExtBackgroundEffectSurfaceV1>,
+    presentation: Option<WpPresentation>,
 }
 
 impl WaylandWindowInner {
@@ -706,7 +747,7 @@ impl WaylandWindowInner {
         // event again to ensure the window is displayed.
         // Fix: https://github.com/wezterm/wezterm/issues/5103
         if self.frame_callback.is_some() {
-            self.events.dispatch(WindowEvent::NeedRepaint);
+            self.dispatch_repaint();
         }
 
         self.do_paint().unwrap();
@@ -1090,9 +1131,11 @@ impl WaylandWindowInner {
 
     fn invalidate(&mut self) {
         if self.frame_callback.is_some() {
+            latency_trace::record(Event::Invalidate, &[self.window_id as u64, 1]);
             self.invalidated = true;
             return;
         }
+        latency_trace::record(Event::Invalidate, &[self.window_id as u64, 0]);
         self.do_paint().unwrap();
     }
 
@@ -1198,9 +1241,46 @@ impl WaylandWindowInner {
         // we will get woken at the appropriate time.
         // <https://github.com/wezterm/wezterm/issues/3468>
         // <https://github.com/wezterm/wezterm/issues/3126>
-        self.events.dispatch(WindowEvent::NeedRepaint);
+        self.dispatch_repaint();
 
         Ok(())
+    }
+
+    fn dispatch_repaint(&mut self) {
+        if latency_trace::enabled() {
+            self.request_presentation_feedback();
+        }
+
+        // Commits are recorded by finish_frame (OpenGL) and
+        // finish_webgpu_frame (WebGpu) when the gui presents
+        self.events.dispatch(WindowEvent::NeedRepaint);
+    }
+
+    fn request_presentation_feedback(&self) {
+        let presentation = match self.presentation.as_ref() {
+            Some(presentation) => presentation,
+            None => return,
+        };
+        let pending =
+            PENDING_FEEDBACK.with(|pending| pending.borrow().contains_key(&self.window_id));
+        if pending {
+            // An earlier paint didn't commit; its feedback still applies
+            // to the next commit
+            return;
+        }
+
+        let frame_id = NEXT_FRAME_ID.fetch_add(1, Ordering::Relaxed);
+        let conn = WaylandConnection::get().unwrap().wayland();
+        let qh = conn.event_queue.borrow().handle();
+        presentation.feedback(
+            self.surface(),
+            &qh,
+            PresentationFeedbackData {
+                window_id: self.window_id,
+                frame_id,
+            },
+        );
+        PENDING_FEEDBACK.with(|pending| pending.borrow_mut().insert(self.window_id, frame_id));
     }
 
     fn surface(&self) -> &WlSurface {
@@ -1532,6 +1612,7 @@ impl CompositorHandler for WaylandState {
         log::trace!("frame: CompositorHandler");
         let surface_data = SurfaceUserData::from_wl(surface);
         let window_id = surface_data.window_id;
+        latency_trace::record(Event::FrameCallback, &[window_id as u64]);
 
         WaylandConnection::with_window_inner(window_id, |inner| {
             inner.next_frame_is_ready();
@@ -1613,6 +1694,75 @@ impl Dispatch<OrgKdeKwinBlur, GlobalData> for WaylandState {
         _qhandle: &wayland_client::QueueHandle<Self>,
     ) {
         // No events from OrgKdeKwinBlur...
+    }
+}
+
+impl Dispatch<WpPresentation, GlobalData> for WaylandState {
+    fn event(
+        _state: &mut Self,
+        _proxy: &WpPresentation,
+        event: <WpPresentation as Proxy>::Event,
+        _data: &GlobalData,
+        _conn: &WConnection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        if let wp_presentation::Event::ClockId { clk_id } = event {
+            latency_trace::record(Event::PresentationClock, &[clk_id as u64]);
+        }
+    }
+}
+
+pub(super) struct PresentationFeedbackData {
+    window_id: usize,
+    frame_id: u64,
+}
+
+impl Dispatch<WpPresentationFeedback, PresentationFeedbackData> for WaylandState {
+    fn event(
+        _state: &mut Self,
+        _proxy: &WpPresentationFeedback,
+        event: <WpPresentationFeedback as Proxy>::Event,
+        data: &PresentationFeedbackData,
+        _conn: &WConnection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            wp_presentation_feedback::Event::Presented {
+                tv_sec_hi,
+                tv_sec_lo,
+                tv_nsec,
+                refresh,
+                flags,
+                ..
+            } => {
+                let secs = ((tv_sec_hi as u64) << 32) | tv_sec_lo as u64;
+                let flags = match flags {
+                    WEnum::Value(flags) => flags.bits(),
+                    WEnum::Unknown(flags) => flags,
+                };
+                latency_trace::record(
+                    Event::Presented,
+                    &[
+                        data.frame_id,
+                        secs * 1_000_000_000 + tv_nsec as u64,
+                        refresh as u64,
+                        flags as u64,
+                    ],
+                );
+            }
+            wp_presentation_feedback::Event::Discarded => {
+                latency_trace::record(Event::Discarded, &[data.frame_id]);
+            }
+            _ => return,
+        }
+        // The feedback applied to a commit that we didn't observe; don't
+        // let a later commit claim it
+        PENDING_FEEDBACK.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            if pending.get(&data.window_id) == Some(&data.frame_id) {
+                pending.remove(&data.window_id);
+            }
+        });
     }
 }
 

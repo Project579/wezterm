@@ -7,17 +7,35 @@ use ::window::glium::uniforms::{
     MagnifySamplerFilter, MinifySamplerFilter, Sampler, SamplerWrapFunction,
 };
 use ::window::glium::{BlendingFunction, LinearBlendingFactor, Surface};
+use ::window::WindowOps;
 use config::FreeTypeLoadTarget;
 
 impl crate::TermWindow {
     pub fn call_draw(&mut self, frame: &mut RenderFrame) -> anyhow::Result<()> {
+        // PaintEnd marks the end of drawing, before the frame is presented.
+        // A glium frame is presented later by finish_frame; a WebGpu frame
+        // is presented here.
         match frame {
-            RenderFrame::Glium(ref mut frame) => self.call_draw_glium(frame),
-            RenderFrame::WebGpu => self.call_draw_webgpu(),
+            RenderFrame::Glium(ref mut frame) => {
+                let result = self.call_draw_glium(frame);
+                latency_trace::record(latency_trace::Event::PaintEnd, &[]);
+                result
+            }
+            RenderFrame::WebGpu => {
+                let output = self.call_draw_webgpu();
+                latency_trace::record(latency_trace::Event::PaintEnd, &[]);
+                output?.present();
+                if let Some(window) = self.window.as_ref() {
+                    window.finish_webgpu_frame();
+                }
+                Ok(())
+            }
         }
     }
 
-    fn call_draw_webgpu(&mut self) -> anyhow::Result<()> {
+    /// Draws and submits the frame, returning the surface texture for the
+    /// caller to present
+    fn call_draw_webgpu(&mut self) -> anyhow::Result<wgpu::SurfaceTexture> {
         use crate::termwindow::webgpu::WebGpuTexture;
 
         let webgpu = self.webgpu.as_mut().unwrap();
@@ -144,9 +162,8 @@ impl crate::TermWindow {
 
         // submit will accept anything that implements IntoIter
         webgpu.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
 
-        Ok(())
+        Ok(output)
     }
 
     fn call_draw_glium(&mut self, frame: &mut glium::Frame) -> anyhow::Result<()> {

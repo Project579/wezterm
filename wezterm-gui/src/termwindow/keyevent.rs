@@ -4,6 +4,7 @@ use ::window::{
 };
 use anyhow::Context;
 use config::keyassignment::{KeyAssignment, KeyTableEntry};
+use mux::localpane::LocalPane;
 use mux::pane::{Pane, PerformAssignmentResult};
 use smol::Timer;
 use std::sync::Arc;
@@ -415,7 +416,7 @@ impl super::TermWindow {
                             context.set_cursor(None);
                         }
                         if !keycode.is_modifier() {
-                            context.invalidate();
+                            Self::invalidate_after_key(&pane, context);
                         }
 
                         return true;
@@ -588,6 +589,19 @@ impl super::TermWindow {
         &self.dead_key_status
     }
 
+    /// Repaint after sending a key to `pane`, if that can show anything.
+    ///
+    /// A local pane has nothing new to show until the program responds, and its
+    /// output invalidates the window anyway. Painting here would only use up
+    /// the next frame, so that the echo has to wait for the one after it. Other
+    /// panes may have changed as a direct result of the key: overlays act on it
+    /// themselves and client panes predict its echo.
+    fn invalidate_after_key(pane: &Arc<dyn Pane>, context: &dyn WindowOps) {
+        if pane.downcast_ref::<LocalPane>().is_none() {
+            context.invalidate();
+        }
+    }
+
     fn leader_done(&mut self) {
         self.leader_is_down.take();
         self.update_title();
@@ -716,7 +730,7 @@ impl super::TermWindow {
                         context.set_cursor(None);
                     }
                     if !key.is_modifier() {
-                        context.invalidate();
+                        Self::invalidate_after_key(&pane, context);
                     }
                 }
             }
@@ -739,7 +753,7 @@ impl super::TermWindow {
                     log::error!("failed to send composed text to pane: {err:#}");
                 }
                 self.maybe_scroll_to_bottom_for_input(&pane);
-                context.invalidate();
+                Self::invalidate_after_key(&pane, context);
             }
             Key::None => {}
         }

@@ -458,6 +458,9 @@ pub struct TermWindow {
     created: Instant,
 
     pub last_frame_duration: Duration,
+    /// (pane_id, seqno) of the panes drawn by the current paint pass,
+    /// collected only while latency tracing is enabled
+    traced_paint_panes: Vec<(PaneId, SequenceNo)>,
     last_fps_check_time: Instant,
     num_frames: usize,
     pub fps: f32,
@@ -687,6 +690,7 @@ impl TermWindow {
             last_fps_check_time: Instant::now(),
             num_frames: 0,
             last_frame_duration: Duration::ZERO,
+            traced_paint_panes: vec![],
             fps: 0.,
             config_subscription: None,
             os_parameters: None,
@@ -996,11 +1000,15 @@ impl TermWindow {
                 } else {
                     log::trace!("DeadKeyStatus now: {:?}", status);
                 }
-                self.dead_key_status = status;
-                self.update_title();
-                // Ensure that we repaint so that any composing
-                // text is updated
-                window.invalidate();
+                // Input methods report no composition around every committed
+                // key, which must not use up the frame the echo needs
+                if self.dead_key_status != status {
+                    self.dead_key_status = status;
+                    self.update_title();
+                    // Ensure that we repaint so that any composing
+                    // text is updated
+                    window.invalidate();
+                }
                 Ok(true)
             }
             WindowEvent::NeedRepaint => {
@@ -1438,6 +1446,7 @@ impl TermWindow {
     }
 
     fn mux_pane_output_event(&mut self, pane_id: PaneId) {
+        latency_trace::record(latency_trace::Event::GuiOutput, &[pane_id as u64]);
         metrics::histogram!("mux.pane_output_event.rate").record(1.);
         if self.is_pane_visible(pane_id) {
             if let Some(ref win) = self.window {
@@ -3380,7 +3389,12 @@ impl TermWindow {
     }
 
     fn scroll_to_bottom(&mut self, pane: &Arc<dyn Pane>) {
-        self.pane_state(pane.pane_id()).viewport = None;
+        let was_scrolled = self.pane_state(pane.pane_id()).viewport.take().is_some();
+        if was_scrolled {
+            if let Some(window) = &self.window {
+                window.invalidate();
+            }
+        }
     }
 
     fn get_active_pane_no_overlay(&self) -> Option<Arc<dyn Pane>> {

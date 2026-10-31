@@ -18,6 +18,7 @@ gl_generator.workspace = true
 wayland = ["wayland-client", "smithay-client-toolkit", "wayland-egl", "wayland-protocols", "wayland-backend", "wayland-protocols-plasma"]
 
 [dependencies]
+latency-trace.workspace = true
 async-channel.workspace = true
 async-io.workspace = true
 async-task.workspace = true

@@ -1,0 +1,9 @@
+[package]
+name = "latency-trace"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Tracing is implemented on unix only; elsewhere the API compiles to no-ops.
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
