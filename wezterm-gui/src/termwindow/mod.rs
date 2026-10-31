@@ -1000,11 +1000,15 @@ impl TermWindow {
                 } else {
                     log::trace!("DeadKeyStatus now: {:?}", status);
                 }
-                self.dead_key_status = status;
-                self.update_title();
-                // Ensure that we repaint so that any composing
-                // text is updated
-                window.invalidate();
+                // Input methods report no composition around every committed
+                // key, which must not use up the frame the echo needs
+                if self.dead_key_status != status {
+                    self.dead_key_status = status;
+                    self.update_title();
+                    // Ensure that we repaint so that any composing
+                    // text is updated
+                    window.invalidate();
+                }
                 Ok(true)
             }
             WindowEvent::NeedRepaint => {
@@ -3383,7 +3387,12 @@ impl TermWindow {
     }
 
     fn scroll_to_bottom(&mut self, pane: &Arc<dyn Pane>) {
-        self.pane_state(pane.pane_id()).viewport = None;
+        let was_scrolled = self.pane_state(pane.pane_id()).viewport.take().is_some();
+        if was_scrolled {
+            if let Some(window) = &self.window {
+                window.invalidate();
+            }
+        }
     }
 
     fn get_active_pane_no_overlay(&self) -> Option<Arc<dyn Pane>> {

@@ -20,6 +20,7 @@ import argparse
 import os
 import sys
 import termios
+import time
 import tty
 
 
@@ -35,6 +36,9 @@ def main():
         description="Toggle row 1 on every keyboard read (latency probe).")
     p.add_argument("--ack", metavar="FILE",
                    help="write the running read count here after each repaint")
+    p.add_argument("--delay-ms", type=float, default=0.0,
+                   help="wait this long before responding to each read, to "
+                        "imitate a program that takes time to echo")
     p.add_argument("--count", type=int, default=0,
                    help="exit after N reads (default: run until Ctrl-C)")
     args = p.parse_args()
@@ -59,6 +63,8 @@ def main():
             data = os.read(fd_in, 4096)
             if not data or b"\x03" in data:
                 break
+            if args.delay_ms:
+                time.sleep(args.delay_ms / 1000)
             os.write(fd_out, rows[count % 2])
             count += 1
             if args.ack:
